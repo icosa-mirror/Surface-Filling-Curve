@@ -1,2 +1,7 @@
-# Build artefacts — the CMake build directory, not the installed binaries
 build_plugin/
+
+Plugins/macOS/*.dylib
+Plugins/Linux/**/*.so
+Plugins/Windows/**/*.dll
+Plugins/iOS/*.a
+Plugins/Android/**/*.so
