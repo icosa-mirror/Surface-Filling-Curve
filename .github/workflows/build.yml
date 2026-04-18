@@ -126,8 +126,8 @@ jobs:
           git switch --orphan upm-tmp
           find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
           cp -r /tmp/upm-package/. .
+          rm -f .gitignore
           git add -A
-          find Plugins -type f \( -name "*.dylib" -o -name "*.so" -o -name "*.dll" -o -name "*.a" \) -exec git add -f {} +
           git diff --cached --quiet && exit 0
           git commit -m "chore: publish upm package [skip ci]"
           git push origin HEAD:upm --force
