@@ -127,7 +127,7 @@ jobs:
           find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
           cp -r /tmp/upm-package/. .
           git add -A
-          git add -f Plugins/**/*.dylib Plugins/**/*.so Plugins/**/*.dll Plugins/**/*.a 2>/dev/null || true
+          find Plugins -type f \( -name "*.dylib" -o -name "*.so" -o -name "*.dll" -o -name "*.a" \) -exec git add -f {} +
           git diff --cached --quiet && exit 0
           git commit -m "chore: publish upm package [skip ci]"
           git push origin HEAD:upm --force
