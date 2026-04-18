@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     strategy:
@@ -119,3 +122,17 @@ jobs:
         with:
           name: com.iota97.surface-filling-curve
           path: unity/com.iota97.surface-filling-curve/
+
+      - name: Publish to upm branch
+        if: github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin upm 2>/dev/null || true
+          git switch --orphan upm-tmp
+          git rm -rf . --quiet
+          cp -r unity/com.iota97.surface-filling-curve/. .
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "chore: publish upm package [skip ci]"
+          git push origin HEAD:upm --force
