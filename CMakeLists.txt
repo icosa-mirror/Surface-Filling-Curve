@@ -21,11 +21,10 @@ else()
     add_library(surface_filling_curve SHARED ${all_sources} src/curve_ffi.cpp)
 endif()
 
-if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
-    # -march=native is meaningless when cross-compiling; the toolchain sets the right arch.
-    target_compile_options(surface_filling_curve PRIVATE -Wall -O3 -march=native)
-else()
+if(CMAKE_SYSTEM_NAME MATCHES "iOS|Android")
     target_compile_options(surface_filling_curve PRIVATE -Wall -O3)
+else()
+    target_compile_options(surface_filling_curve PRIVATE -Wall -O3 -march=native)
 endif()
 
 set_target_properties(surface_filling_curve PROPERTIES
