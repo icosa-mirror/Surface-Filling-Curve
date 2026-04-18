@@ -50,7 +50,7 @@ jobs:
               -DCMAKE_ANDROID_STL_TYPE=c++_static
               -DANDROID_PLATFORM=android-24
             lib_src: build_plugin/libsurface_filling_curve.so
-            lib_dst: unity/com.iota97.surface-filling-curve/Plugins/Android/libs/arm64-v8a/libsurface_filling_curve.so
+            lib_dst: unity/com.iota97.surface-filling-curve/Plugins/Android/libsurface_filling_curve.so
 
     runs-on: ${{ matrix.os }}
     name: build-${{ matrix.name }}
@@ -115,7 +115,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: binary-android
-          path: unity/com.iota97.surface-filling-curve/Plugins/Android/libs/arm64-v8a/
+          path: unity/com.iota97.surface-filling-curve/Plugins/Android/
 
       - name: Upload Unity package
         uses: actions/upload-artifact@v4
@@ -133,6 +133,7 @@ jobs:
           find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
           cp -r /tmp/upm-package/. .
           git add -A
+          git add -f Plugins/**/*.dylib Plugins/**/*.so Plugins/**/*.dll Plugins/**/*.a 2>/dev/null || true
           git diff --cached --quiet && exit 0
           git commit -m "chore: publish upm package [skip ci]"
           git push origin HEAD:upm --force
