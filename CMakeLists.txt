@@ -7,16 +7,27 @@ file(GLOB_RECURSE all_sources src/*.cpp src/*.h)
 list(FILTER all_sources EXCLUDE REGEX ".*/main\\.cpp$")
 list(FILTER all_sources EXCLUDE REGEX ".*/curve_ffi\\.cpp$")
 
-# ── CLI executable (unchanged behaviour) ────────────────────────────────────
-add_executable(curve ${all_sources} src/main.cpp)
-target_compile_options(curve PRIVATE -Wall -O3 -march=native)
+# iOS and Android only build the plugin — no CLI executable on those platforms.
+if(NOT CMAKE_SYSTEM_NAME MATCHES "iOS|Android")
+    add_executable(curve ${all_sources} src/main.cpp)
+    target_compile_options(curve PRIVATE -Wall -O3 -march=native)
+endif()
 
-# ── Shared library for Unity / .NET P/Invoke ────────────────────────────────
-add_library(surface_filling_curve SHARED ${all_sources} src/curve_ffi.cpp)
-target_compile_options(surface_filling_curve PRIVATE -Wall -O3 -march=native)
+# ── Shared library for Unity / .NET P/Invoke (desktop + Android) ────────────
+# ── Static library for iOS (dynamic libs are not permitted in iOS apps) ──────
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    add_library(surface_filling_curve STATIC ${all_sources} src/curve_ffi.cpp)
+else()
+    add_library(surface_filling_curve SHARED ${all_sources} src/curve_ffi.cpp)
+endif()
 
-# Hide all symbols by default; only SFC_API-tagged symbols are exported.
-# This keeps the DLL surface clean and avoids accidental C++ ABI exposure.
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    # -march=native is meaningless when cross-compiling; the toolchain sets the right arch.
+    target_compile_options(surface_filling_curve PRIVATE -Wall -O3 -march=native)
+else()
+    target_compile_options(surface_filling_curve PRIVATE -Wall -O3)
+endif()
+
 set_target_properties(surface_filling_curve PROPERTIES
     CXX_VISIBILITY_PRESET hidden
     VISIBILITY_INLINES_HIDDEN ON

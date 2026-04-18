@@ -12,41 +12,66 @@ jobs:
       matrix:
         include:
           - os: macos-latest
+            cmake_extra: ""
             lib_src: build_plugin/libsurface_filling_curve.dylib
             lib_dst: unity/com.iota97.surface-filling-curve/Plugins/macOS/libsurface_filling_curve.dylib
-            artifact: libsurface_filling_curve.dylib
+
           - os: ubuntu-latest
+            cmake_extra: ""
             lib_src: build_plugin/libsurface_filling_curve.so
             lib_dst: unity/com.iota97.surface-filling-curve/Plugins/Linux/x86_64/libsurface_filling_curve.so
-            artifact: libsurface_filling_curve.so
+
           - os: windows-latest
+            cmake_extra: ""
             lib_src: build_plugin/Release/surface_filling_curve.dll
             lib_dst: unity/com.iota97.surface-filling-curve/Plugins/Windows/x86_64/surface_filling_curve.dll
-            artifact: surface_filling_curve.dll
+
+          - os: macos-latest
+            name: ios
+            cmake_extra: >-
+              -DCMAKE_SYSTEM_NAME=iOS
+              -DCMAKE_OSX_ARCHITECTURES=arm64
+              -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0
+            lib_src: build_plugin/libsurface_filling_curve.a
+            lib_dst: unity/com.iota97.surface-filling-curve/Plugins/iOS/libsurface_filling_curve.a
+
+          - os: ubuntu-latest
+            name: android
+            cmake_extra: >-
+              -DCMAKE_SYSTEM_NAME=Android
+              -DCMAKE_ANDROID_NDK=$ANDROID_NDK_ROOT
+              -DCMAKE_ANDROID_ARCH_ABI=arm64-v8a
+              -DCMAKE_ANDROID_STL_TYPE=c++_static
+              -DANDROID_PLATFORM=android-24
+            lib_src: build_plugin/libsurface_filling_curve.so
+            lib_dst: unity/com.iota97.surface-filling-curve/Plugins/Android/libs/arm64-v8a/libsurface_filling_curve.so
 
     runs-on: ${{ matrix.os }}
+    name: build-${{ matrix.name || matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Configure
-        run: cmake -B build_plugin -S . -DCMAKE_BUILD_TYPE=Release
+        run: cmake -B build_plugin -S . -DCMAKE_BUILD_TYPE=Release ${{ matrix.cmake_extra }}
 
       - name: Build
         run: cmake --build build_plugin --target surface_filling_curve --config Release
 
       - name: Install plugin
         shell: bash
-        run: cp "${{ matrix.lib_src }}" "${{ matrix.lib_dst }}"
+        run: |
+          mkdir -p "$(dirname "${{ matrix.lib_dst }}")"
+          cp "${{ matrix.lib_src }}" "${{ matrix.lib_dst }}"
 
-      - name: Sign (macOS)
-        if: runner.os == 'macOS'
+      - name: Sign (macOS desktop only)
+        if: runner.os == 'macOS' && matrix.name != 'ios'
         run: codesign --force --sign - "${{ matrix.lib_dst }}"
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: binary-${{ matrix.os }}
+          name: binary-${{ matrix.name || matrix.os }}
           path: ${{ matrix.lib_dst }}
 
   package:
@@ -73,6 +98,18 @@ jobs:
         with:
           name: binary-windows-latest
           path: unity/com.iota97.surface-filling-curve/Plugins/Windows/x86_64/
+
+      - name: Download iOS binary
+        uses: actions/download-artifact@v4
+        with:
+          name: binary-ios
+          path: unity/com.iota97.surface-filling-curve/Plugins/iOS/
+
+      - name: Download Android binary
+        uses: actions/download-artifact@v4
+        with:
+          name: binary-android
+          path: unity/com.iota97.surface-filling-curve/Plugins/Android/libs/arm64-v8a/
 
       - name: Upload Unity package
         uses: actions/upload-artifact@v4
