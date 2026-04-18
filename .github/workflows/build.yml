@@ -14,12 +14,15 @@ jobs:
           - os: macos-latest
             lib_src: build_plugin/libsurface_filling_curve.dylib
             lib_dst: unity/com.iota97.surface-filling-curve/Plugins/macOS/libsurface_filling_curve.dylib
+            artifact: libsurface_filling_curve.dylib
           - os: ubuntu-latest
             lib_src: build_plugin/libsurface_filling_curve.so
             lib_dst: unity/com.iota97.surface-filling-curve/Plugins/Linux/x86_64/libsurface_filling_curve.so
+            artifact: libsurface_filling_curve.so
           - os: windows-latest
             lib_src: build_plugin/Release/surface_filling_curve.dll
             lib_dst: unity/com.iota97.surface-filling-curve/Plugins/Windows/x86_64/surface_filling_curve.dll
+            artifact: surface_filling_curve.dll
 
     runs-on: ${{ matrix.os }}
 
@@ -40,8 +43,39 @@ jobs:
         if: runner.os == 'macOS'
         run: codesign --force --sign - "${{ matrix.lib_dst }}"
 
-      - name: Upload artifact
+      - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: plugin-${{ matrix.os }}
+          name: binary-${{ matrix.os }}
           path: ${{ matrix.lib_dst }}
+
+  package:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download macOS binary
+        uses: actions/download-artifact@v4
+        with:
+          name: binary-macos-latest
+          path: unity/com.iota97.surface-filling-curve/Plugins/macOS/
+
+      - name: Download Linux binary
+        uses: actions/download-artifact@v4
+        with:
+          name: binary-ubuntu-latest
+          path: unity/com.iota97.surface-filling-curve/Plugins/Linux/x86_64/
+
+      - name: Download Windows binary
+        uses: actions/download-artifact@v4
+        with:
+          name: binary-windows-latest
+          path: unity/com.iota97.surface-filling-curve/Plugins/Windows/x86_64/
+
+      - name: Upload Unity package
+        uses: actions/upload-artifact@v4
+        with:
+          name: unity-plugin
+          path: unity/com.iota97.surface-filling-curve/
