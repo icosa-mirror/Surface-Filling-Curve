@@ -76,6 +76,22 @@ The input mesh must be both vertex and edge manifold. The direction field can be
 
 ![Blender export process](img/export.png)
 
+### Unity Package
+
+A Unity package with pre-built native binaries for macOS, Windows, Linux, iOS, and Android is available via UPM. In your project's `Packages/manifest.json`, add:
+
+```json
+"com.iota97.surface-filling-curve": "https://github.com/icosa-mirror/Surface-Filling-Curve.git#upm"
+```
+
+Or in the Package Manager UI, choose **Add package from git URL** and enter:
+
+```
+https://github.com/icosa-mirror/Surface-Filling-Curve.git#upm
+```
+
+The package includes a `SurfaceFillingCurveRenderer` MonoBehaviour (found under **Add Component → Surface Filling Curve → Surface Filling Curve Renderer**). Attach it to any GameObject with a `MeshFilter` to generate and render the curve as `LineRenderer` objects. Generation runs on a background thread so the main thread is never blocked.
+
 ### Blender 4.5 Add-on
 
 We provide an add-on to use the code in Blender 4.5 LTS. To install the plugin, follow these steps:
