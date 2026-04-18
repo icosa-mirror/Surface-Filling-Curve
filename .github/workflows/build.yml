@@ -11,23 +11,26 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: macos-latest
+          - name: macos
+            os: macos-latest
             cmake_extra: ""
             lib_src: build_plugin/libsurface_filling_curve.dylib
             lib_dst: unity/com.iota97.surface-filling-curve/Plugins/macOS/libsurface_filling_curve.dylib
 
-          - os: ubuntu-latest
+          - name: linux
+            os: ubuntu-latest
             cmake_extra: ""
             lib_src: build_plugin/libsurface_filling_curve.so
             lib_dst: unity/com.iota97.surface-filling-curve/Plugins/Linux/x86_64/libsurface_filling_curve.so
 
-          - os: windows-latest
+          - name: windows
+            os: windows-latest
             cmake_extra: ""
             lib_src: build_plugin/Release/surface_filling_curve.dll
             lib_dst: unity/com.iota97.surface-filling-curve/Plugins/Windows/x86_64/surface_filling_curve.dll
 
-          - os: macos-latest
-            name: ios
+          - name: ios
+            os: macos-latest
             cmake_extra: >-
               -DCMAKE_SYSTEM_NAME=iOS
               -DCMAKE_OSX_ARCHITECTURES=arm64
@@ -35,8 +38,8 @@ jobs:
             lib_src: build_plugin/libsurface_filling_curve.a
             lib_dst: unity/com.iota97.surface-filling-curve/Plugins/iOS/libsurface_filling_curve.a
 
-          - os: ubuntu-latest
-            name: android
+          - name: android
+            os: ubuntu-latest
             cmake_extra: >-
               -DCMAKE_SYSTEM_NAME=Android
               -DCMAKE_ANDROID_NDK=$ANDROID_NDK_ROOT
@@ -47,7 +50,7 @@ jobs:
             lib_dst: unity/com.iota97.surface-filling-curve/Plugins/Android/libs/arm64-v8a/libsurface_filling_curve.so
 
     runs-on: ${{ matrix.os }}
-    name: build-${{ matrix.name || matrix.os }}
+    name: build-${{ matrix.name }}
 
     steps:
       - uses: actions/checkout@v4
@@ -65,13 +68,13 @@ jobs:
           cp "${{ matrix.lib_src }}" "${{ matrix.lib_dst }}"
 
       - name: Sign (macOS desktop only)
-        if: runner.os == 'macOS' && matrix.name != 'ios'
+        if: matrix.name == 'macos'
         run: codesign --force --sign - "${{ matrix.lib_dst }}"
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: binary-${{ matrix.name || matrix.os }}
+          name: binary-${{ matrix.name }}
           path: ${{ matrix.lib_dst }}
 
   package:
@@ -84,19 +87,19 @@ jobs:
       - name: Download macOS binary
         uses: actions/download-artifact@v4
         with:
-          name: binary-macos-latest
+          name: binary-macos
           path: unity/com.iota97.surface-filling-curve/Plugins/macOS/
 
       - name: Download Linux binary
         uses: actions/download-artifact@v4
         with:
-          name: binary-ubuntu-latest
+          name: binary-linux
           path: unity/com.iota97.surface-filling-curve/Plugins/Linux/x86_64/
 
       - name: Download Windows binary
         uses: actions/download-artifact@v4
         with:
-          name: binary-windows-latest
+          name: binary-windows
           path: unity/com.iota97.surface-filling-curve/Plugins/Windows/x86_64/
 
       - name: Download iOS binary
@@ -114,5 +117,5 @@ jobs:
       - name: Upload Unity package
         uses: actions/upload-artifact@v4
         with:
-          name: unity-plugin
+          name: com.iota97.surface-filling-curve
           path: unity/com.iota97.surface-filling-curve/
