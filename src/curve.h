@@ -5,11 +5,12 @@
 #include "stripe.h"
 #include "stitcher.h"
 #include "isolines.h"
+#include <atomic>
 
 class Curve {
 public:
     Curve(const float *vertsPositions, uint32_t vertsCount, const uint32_t *triangleIndices, uint32_t triangleCount,
-        float width, const float *directions = nullptr, Stripe::Mode mode = Stripe::Mode::Extrinsic, bool resample = false, bool repulse = false, bool stitch = true, bool quiet = false);
+        float width, const float *directions = nullptr, Stripe::Mode mode = Stripe::Mode::Extrinsic, bool resample = false, bool repulse = false, bool stitch = true, bool quiet = false, const std::atomic<int>* cancel = nullptr, int maxTriangles = -1);
 
     std::vector<std::vector<std::array<Vec3, 2>>> getCycles() const;
     void saveDirectionsToPLY(const char *path) const;

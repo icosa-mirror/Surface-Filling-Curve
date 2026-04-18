@@ -9,7 +9,7 @@
 #include <chrono>
 #include <iostream>
 
-Subdivide::Subdivide(const float *vertsPosition, const float *vertsScalars, const float *vertsDirections, const uint32_t *trianglesID, uint32_t vertsCount, uint32_t trisCount, float maxLength, bool quiet, bool cut) {
+Subdivide::Subdivide(const float *vertsPosition, const float *vertsScalars, const float *vertsDirections, const uint32_t *trianglesID, uint32_t vertsCount, uint32_t trisCount, float maxLength, bool quiet, bool cut, int maxTriangles) {
     auto startTime = std::chrono::steady_clock::now();
     positions.resize(3*vertsCount);
     directions.resize(3*vertsCount);
@@ -41,13 +41,10 @@ Subdivide::Subdivide(const float *vertsPosition, const float *vertsScalars, cons
     }
 
     size_t diskTime = 0;
-    if (maxEdgeLength <= maxLength) {
-        auto startDiskTime = std::chrono::steady_clock::now();
-        borderEdges = Disk::edgesCut(triangles.data(), trisCount, cut);
-        diskTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startDiskTime).count();
-    }
 
-    while (maxEdgeLength > maxLength) {
+    int subdivPasses = 0;
+    while (maxEdgeLength > maxLength && (maxTriangles < 0 || (int)(trisCount * 4) <= maxTriangles)) {
+        ++subdivPasses;
         std::vector<uint32_t> newFaces(3*4*trisCount);
         std::map<std::array<uint32_t, 2>, uint32_t> edgesID;
 
@@ -117,33 +114,6 @@ Subdivide::Subdivide(const float *vertsPosition, const float *vertsScalars, cons
             maxEdgeLength = std::max(maxEdgeLength, (Vec3(newPositions.data(), v01) - Vec3(newPositions.data(), v1)).length());
         }
 
-        if (maxEdgeLength <= maxLength) {
-            auto startDiskTime = std::chrono::steady_clock::now();
-            auto tmpBorderEdges = Disk::edgesCut(triangles.data(), trisCount, cut);
-            diskTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startDiskTime).count();
-            borderEdges.clear();
-            for (uint32_t i = 0; i < trisCount; ++i) {
-                uint32_t v0 = triangles[3*i+0], v1 = triangles[3*i+1], v2 = triangles[3*i+2];
-                std::array<uint32_t, 2> e0{std::min(v0, v1), std::max(v0, v1)};
-                std::array<uint32_t, 2> e1{std::min(v0, v2), std::max(v0, v2)};
-                std::array<uint32_t, 2> e2{std::min(v1, v2), std::max(v1, v2)};
-                uint32_t v01 = vertsCount+edgesID[e0], v02 = vertsCount+edgesID[e1], v12 = vertsCount+edgesID[e2];
-
-                if (tmpBorderEdges.count(e0)) {
-                    borderEdges.insert({std::min(v0, v01), std::max(v0, v01)});
-                    borderEdges.insert({std::min(v01, v1), std::max(v01, v1)});
-                }
-                if (tmpBorderEdges.count(e1)) {
-                    borderEdges.insert({std::min(v0, v02), std::max(v0, v02)});
-                    borderEdges.insert({std::min(v02, v2), std::max(v02, v2)});
-                }
-                if (tmpBorderEdges.count(e2)) {
-                    borderEdges.insert({std::min(v1, v12), std::max(v1, v12)});
-                    borderEdges.insert({std::min(v12, v2), std::max(v12, v2)});
-                }
-            }
-        }
-
         triangles = std::move(newFaces);
         positions = std::move(newPositions);
         scalars = std::move(newScalars);
@@ -152,8 +122,21 @@ Subdivide::Subdivide(const float *vertsPosition, const float *vertsScalars, cons
         vertsCount = positions.size()/3;
     }
 
+    // Compute border edges on the final mesh, regardless of whether subdivision
+    // ran.  Previously this was computed conditionally (before the loop if no
+    // subdivision was needed, inside the loop on the last pass), which left
+    // borderEdges empty when the maxTriangles cap prevented the loop from
+    // running even though the mesh needed subdivision.  An empty borderEdges
+    // set causes the stitcher to treat all vertices as interior, corrupting the
+    // adjacency ordering and producing crashes.
+    {
+        auto startDiskTime = std::chrono::steady_clock::now();
+        borderEdges = Disk::edgesCut(triangles.data(), trisCount, cut);
+        diskTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startDiskTime).count();
+    }
+
     if (!quiet) {
-        std::cout << "Subdivide: " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startTime).count() - diskTime << " ms" << std::endl;
+        std::cout << "Subdivide: " << subdivPasses << " pass(es), " << trisCount << " triangles (" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startTime).count() - diskTime << " ms)" << std::endl;
         std::cout << "Disk cut: " << diskTime << " ms" << std::endl;
     }
 }

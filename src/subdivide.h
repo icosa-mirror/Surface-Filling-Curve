@@ -8,7 +8,7 @@
 
 class Subdivide {
 public:
-    Subdivide(const float *vertsPosition, const float *scalars, const float *directions, const uint32_t *trianglesID, uint32_t vertsCount, uint32_t trisCount, float maxLength, bool quiet = true, bool cut = true);
+    Subdivide(const float *vertsPosition, const float *scalars, const float *directions, const uint32_t *trianglesID, uint32_t vertsCount, uint32_t trisCount, float maxLength, bool quiet = true, bool cut = true, int maxTriangles = -1);
     
     const float *getPositions() const {
         return positions.data();

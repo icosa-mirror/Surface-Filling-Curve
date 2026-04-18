@@ -47,8 +47,9 @@ Stitcher::Stitcher(const float *vertsPosition, const float *vertsNormal, const u
     generateAdjacency();
 }
 
-void Stitcher::getConnectedComponents() {
+void Stitcher::getConnectedComponents(const std::atomic<int>* cancel) {
     std::unordered_set<uint32_t> unexplored;
+    unexplored.reserve(vertsCount);
     for (uint32_t i = 0; i < vertsCount; ++i) {
         unexplored.insert(i);
     }
@@ -56,6 +57,7 @@ void Stitcher::getConnectedComponents() {
     uint32_t label = 0;
     connectedRegionPositiveOnlyCount = 0;
     while (!unexplored.empty()) {
+        if (cancel && cancel->load(std::memory_order_relaxed)) return;
         bool negative = false;
         uint32_t i = *unexplored.begin();
         unexplored.erase(i);
@@ -81,8 +83,9 @@ void Stitcher::getConnectedComponents() {
     connectedRegionCount = label - connectedRegionPositiveOnlyCount;
 }
 
-void Stitcher::floodRegion() {
+void Stitcher::floodRegion(const std::atomic<int>* cancel) {
     std::unordered_set<uint32_t> unexplored;
+    unexplored.reserve(vertsCount);
     for (uint32_t i = 0; i < vertsCount; ++i) {
         unexplored.insert(i);
     }
@@ -91,6 +94,7 @@ void Stitcher::floodRegion() {
     positiveRegion = 0;
     negativeRegion = 0;
     while (!unexplored.empty()) {
+        if (cancel && cancel->load(std::memory_order_relaxed)) return;
         uint32_t i = *unexplored.begin();
         unexplored.erase(i);
         stack.push_back(i);
@@ -117,7 +121,7 @@ void Stitcher::floodRegion() {
     positiveRegion -= connectedRegionPositiveOnlyCount;
 }
 
-void Stitcher::stitch(const float *vertsScalars, float period, bool stitch, bool showProgress) {
+void Stitcher::stitch(const float *vertsScalars, float period, bool stitch, bool showProgress, const std::atomic<int>* cancel) {
     Parallel::For(0, vertsCount, [this, vertsScalars](size_t i) {
         scalars[i] = vertsScalars[i];
     });
@@ -127,9 +131,14 @@ void Stitcher::stitch(const float *vertsScalars, float period, bool stitch, bool
     cleanIsolated();
     bool success = false;
     bool first = true;
+    int subdivideCount = 0;
+    const int maxSubdivisions = 0;
     while (!success) {
-        getConnectedComponents();
-        floodRegion();
+        if (cancel && cancel->load(std::memory_order_relaxed)) return;
+        getConnectedComponents(cancel);
+        if (cancel && cancel->load(std::memory_order_relaxed)) return;
+        floodRegion(cancel);
+        if (cancel && cancel->load(std::memory_order_relaxed)) return;
         if (first && showProgress) {
             first = false;
             std::cout << "Connected components having cycles: " << connectedRegionCount << std::endl;
@@ -138,10 +147,16 @@ void Stitcher::stitch(const float *vertsScalars, float period, bool stitch, bool
         if (!connectedRegionCount) {
             break;
         }
-        success = connectRegions(period, showProgress);
+        success = connectRegions(period, showProgress, cancel);
         if (!success) {
+            if (cancel && cancel->load(std::memory_order_relaxed)) return;
+            if (subdivideCount >= maxSubdivisions) {
+                if (showProgress) std::cout << "\nMax subdivisions reached (" << maxSubdivisions << "); stopping stitcher." << std::endl;
+                break;
+            }
             if (showProgress) std::cout << "\nNo path found: subdividing..." << std::endl;
             subdivide();
+            ++subdivideCount;
         }
     }
 }
@@ -179,16 +194,17 @@ static void printProgress(const char *what, float percentage) {
     if (percentage == 1.0f) printf("\n");
 }
 
-bool Stitcher::connectRegions(float period, bool showProgress) {
+bool Stitcher::connectRegions(float period, bool showProgress, const std::atomic<int>* cancel) {
     uint32_t parity = 0;
     float total = positiveRegion + negativeRegion - 2*connectedRegionCount;
 
     while (positiveRegion > connectedRegionCount || negativeRegion > connectedRegionCount) {
+        if (cancel && cancel->load(std::memory_order_relaxed)) return false;
         bool positive = (++parity) % 2;
         if (positiveRegion == connectedRegionCount) positive = false;
         if (negativeRegion == connectedRegionCount) positive = true;
-            
-        bool success = connectRegion(period, positive);
+
+        bool success = connectRegion(period, positive, cancel);
         if (!success) {
             return false;
         }
@@ -261,7 +277,7 @@ void Stitcher::computeMask(bool positives) {
 }
 
 
-bool Stitcher::connectRegion(float period, bool positives) {
+bool Stitcher::connectRegion(float period, bool positives, const std::atomic<int>* cancel) {
     auto test = [positives](float f) { return positives ? f < 0 : f >= 0; };
     computeMask(positives);
 
@@ -287,7 +303,11 @@ bool Stitcher::connectRegion(float period, bool positives) {
         }
     });
 
+    uint32_t totalIter = 0;
+    const uint32_t maxIter = vertsCount * 2 + 16;
     for (uint32_t iter = 0; iter < 4; ++iter) {
+        if (cancel && cancel->load(std::memory_order_relaxed)) return false;
+        if (++totalIter > maxIter) return false;
         auto found = Parallel::ForAny2(0, vertsCount, [this, iter, test](size_t i) {
             if (!mask[i]) {
                 bool change = false;
@@ -323,7 +343,7 @@ bool Stitcher::connectRegion(float period, bool positives) {
                 return std::array<bool, 2>{!std::isinf(distances[i][1][1-iter%2]), change};
             }
             return std::array<bool, 2>{false, false};
-        });
+        }, cancel);
 
         if (!found[0]) {
             iter %= 2;
@@ -341,7 +361,7 @@ bool Stitcher::connectRegion(float period, bool positives) {
 
     uint32_t startId = Parallel::ArgMin(0, vertsCount, [this, test](size_t i) {
         return test(scalars[i]) ? distances[i][0][0]+distances[i][1][0] : std::numeric_limits<float>::infinity();
-    });
+    }, cancel);
 
     uint32_t curr = startId;
     while (test(scalars[curr])) {
@@ -374,13 +394,13 @@ bool Stitcher::connectRegion(float period, bool positives) {
             regionID[i] = closeID;
         }
         distances[i][0][0] = std::numeric_limits<float>::infinity();
-    });
+    }, cancel);
 
-    widthenStitch(period, positives, closeID);
+    widthenStitch(period, positives, closeID, cancel);
     return true;
 }
 
-void Stitcher::widthenStitch(float period, bool positives, uint32_t id) {
+void Stitcher::widthenStitch(float period, bool positives, uint32_t id, const std::atomic<int>* cancel) {
     std::deque<uint32_t> queue;
     std::unordered_set<uint32_t> toRetry;
     std::unordered_set<uint32_t> toRetryDeleted;
@@ -397,7 +417,11 @@ void Stitcher::widthenStitch(float period, bool positives, uint32_t id) {
             distances[j][0][0] = (Vec3(position.data(), i)-Vec3(position.data(), j)).length();
         }
     }
+    uint32_t widthenIter = 0;
+    const uint32_t maxWidthenIter = vertsCount * 16;
     while (!queue.empty()) {
+        if (cancel && cancel->load(std::memory_order_relaxed)) return;
+        if (++widthenIter > maxWidthenIter) return;
         uint32_t i = queue.front();
         queue.pop_front();
         if (!isBorder[i]) {
@@ -558,6 +582,11 @@ void Stitcher::generateAdjacency() {
 
 void Stitcher::orderAdjacency() {
     Edge *edgesTMP = new Edge[edgesCount];
+    // Pre-populate with the existing valid (unordered) edges so that any vertex
+    // whose ring traversal breaks early (boundary edge in non-border code path)
+    // leaves valid fallback data instead of uninitialized garbage.  Garbage edge
+    // ids cause out-of-bounds accesses in getRingNumber() → scalars[id] → crash.
+    std::memcpy(edgesTMP, edges.get(), edgesCount * sizeof(Edge));
     std::unordered_map<uint32_t, std::vector<uint32_t>> vertsFaces;
     std::map<std::array<uint32_t, 2>, std::vector<uint32_t>> edgesFaces;
     for (uint32_t i = 0; i < facesCount; ++i) {
@@ -575,28 +604,57 @@ void Stitcher::orderAdjacency() {
         return Edge();
     };
 
-    Parallel::For(0, vertsCount, [this, edgesTMP, &vertsFaces, &edgesFaces, &getEdge](uint32_t i) {
-        uint32_t offset = adjMatrix.get()[i]-adjMatrix.get()[0];
+    // Run serially — the traversal is complex shared-read logic that is extremely
+    // difficult to make correct under parallelism (concurrent map lookups across
+    // a std::map and std::unordered_map with non-trivial closures caused
+    // repeated crashes in the parallel version even though each access was
+    // nominally read-only).  This is called once per generation; even 200 K
+    // vertices finishes in well under a second.
+    for (uint32_t i = 0; i < vertsCount; ++i) {
+        uint32_t offset    = static_cast<uint32_t>(adjMatrix.get()[i]   - adjMatrix.get()[0]);
+        uint32_t offsetEnd = static_cast<uint32_t>(adjMatrix.get()[i+1] - adjMatrix.get()[0]);
         if (isBorder[i]) {
             for (auto n : getNeighborhood(i)) {
+                if (offset >= offsetEnd) break; // safety bound
                 edgesTMP[offset++] = n;
             }
         } else {
-            uint32_t f = vertsFaces[i][0];
+            auto vfIt = vertsFaces.find(i);
+            if (vfIt == vertsFaces.end() || vfIt->second.empty()) continue;
+            uint32_t f = vfIt->second[0];
             uint32_t v = uint32_t(-1);
 
-            while(offset != adjMatrix.get()[i+1]-adjMatrix.get()[0]) {
-                if (i != faces[f*3+0] && v != faces[f*3+0]) { edgesTMP[offset++] = getEdge(i, faces[f*3+0]); v = faces[f*3+0]; }
-                else if (i != faces[f*3+1] && v != faces[f*3+1]) { edgesTMP[offset++] = getEdge(i, faces[f*3+1]); v = faces[f*3+1]; }
-                else if (i != faces[f*3+2] && v != faces[f*3+2]) { edgesTMP[offset++] = getEdge(i, faces[f*3+2]); v = faces[f*3+2]; }
-                f = edgesFaces[{std::min(i, v), std::max(i, v)}][0] != f ? edgesFaces[{std::min(i, v), std::max(i, v)}][0] : edgesFaces[{std::min(i, v), std::max(i, v)}][1];
+            // visited tracks neighbours already written so we never write a
+            // duplicate (which would happen for non-manifold "bowtie" vertices
+            // and cause the slot count to overflow into the next vertex's range).
+            std::unordered_set<uint32_t> visited;
+
+            while (offset < offsetEnd) {
+                uint32_t picked = uint32_t(-1);
+                for (int k = 0; k < 3; ++k) {
+                    uint32_t fv = faces[f*3+k];
+                    if (fv != i && fv != v && !visited.count(fv)) {
+                        picked = fv;
+                        break;
+                    }
+                }
+                if (picked == uint32_t(-1)) break; // all neighbours of this face already emitted
+                edgesTMP[offset++] = getEdge(i, picked);
+                visited.insert(picked);
+                v = picked;
+
+                // Navigate to the next face around vertex i via edge {i,v}.
+                auto efIt = edgesFaces.find({std::min(i, v), std::max(i, v)});
+                if (efIt == edgesFaces.end() || efIt->second.size() < 2) break;
+                const auto& fl = efIt->second;
+                f = (fl[0] != f) ? fl[0] : fl[1];
             }
         }
-    });
+    }
 
-    Parallel::For(0, edgesCount, [&](uint32_t i) {
+    for (uint32_t i = 0; i < edgesCount; ++i) {
         edges.get()[i] = edgesTMP[i];
-    });
+    }
 
     delete[] edgesTMP;
 }

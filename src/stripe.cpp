@@ -7,9 +7,9 @@
 #include <chrono>
 #include <iostream>
 
-Stripe::Stripe(const float *vertsPositions, const float *directions, const uint32_t *triangleIndices, uint32_t vertsCount, uint32_t triangleCount, float width, Mode mode, bool cut, bool quiet)
+Stripe::Stripe(const float *vertsPositions, const float *directions, const uint32_t *triangleIndices, uint32_t vertsCount, uint32_t triangleCount, float width, Mode mode, bool cut, bool quiet, int maxTriangles)
         : width(width), mode(mode) {
-    Subdivide subdividedMesh(vertsPositions, mode == Mode::Extrinsic ? nullptr : directions, mode == Mode::Extrinsic ? directions : nullptr, triangleIndices, vertsCount, triangleCount, 0.5f*width, quiet, mode != Mode::Printing && cut);
+    Subdivide subdividedMesh(vertsPositions, mode == Mode::Extrinsic ? nullptr : directions, mode == Mode::Extrinsic ? directions : nullptr, triangleIndices, vertsCount, triangleCount, 0.5f*width, quiet, mode != Mode::Printing && cut, maxTriangles);
     auto startTime = std::chrono::steady_clock::now();
 
     vertsPositions = subdividedMesh.getPositions();

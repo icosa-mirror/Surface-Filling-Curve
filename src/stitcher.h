@@ -3,13 +3,14 @@
 
 #pragma once
 #include "stripe.h"
+#include <atomic>
 
 class Stitcher {
 public:
     Stitcher(const float *vertsPosition, const float *vertsNormal, const uint32_t *triangles, uint32_t vertsCount, uint32_t facesCount, const std::set<std::array<uint32_t, 2>>& borderEdges);
     Stitcher() = default;
     
-    void stitch(const float *vertsScalars, float period, bool stitch = true, bool showProgress = false);
+    void stitch(const float *vertsScalars, float period, bool stitch = true, bool showProgress = false, const std::atomic<int>* cancel = nullptr);
     void repulse();
 
     void saveMeshToPLY(const char *path) const;
@@ -38,15 +39,15 @@ private:
         Edge *end() const { return e; }
     };
 
-    void floodRegion();
+    void floodRegion(const std::atomic<int>* cancel = nullptr);
     void cleanIsolated();
-    bool connectRegions(float period, bool showProgress);
+    bool connectRegions(float period, bool showProgress, const std::atomic<int>* cancel = nullptr);
     void computeRingNumber();
     uint32_t getRingNumber(uint32_t i);
-    bool connectRegion(float period, bool positives);
+    bool connectRegion(float period, bool positives, const std::atomic<int>* cancel = nullptr);
     void computeMask(bool positives);
-    void getConnectedComponents();
-    void widthenStitch(float period, bool positives, uint32_t id);
+    void getConnectedComponents(const std::atomic<int>* cancel = nullptr);
+    void widthenStitch(float period, bool positives, uint32_t id, const std::atomic<int>* cancel = nullptr);
 
     void generateAdjacency();
     void orderAdjacency();

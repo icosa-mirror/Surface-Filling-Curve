@@ -18,7 +18,7 @@ public:
         Printing,
     };
 
-    Stripe(const float *vertsPositions, const float *directions, const uint32_t *triangleIndices, uint32_t vertsCount, uint32_t triangleCount, float width, Mode mode, bool cut = true, bool quiet = true);
+    Stripe(const float *vertsPositions, const float *directions, const uint32_t *triangleIndices, uint32_t vertsCount, uint32_t triangleCount, float width, Mode mode, bool cut = true, bool quiet = true, int maxTriangles = -1);
     Stripe() = default;
     void optimize();
     void saveMeshToPLY(const char *path, bool direction = false) const;

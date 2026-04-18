@@ -2,29 +2,41 @@
 // Copyright 2026 Giovanni Cocco and Inria
 
 #include "curve.h"
+#include <atomic>
 #include <chrono>
 #include <iostream>
 
 Curve::Curve(const float *vertsPositions, uint32_t vertsCount, const uint32_t *triangleIndices, uint32_t triangleCount,
-    float width, const float *directions, Stripe::Mode mode, bool resample, bool repulse, bool stitch, bool quiet) : width (width), quiet(quiet) {
+    float width, const float *directions, Stripe::Mode mode, bool resample, bool repulse, bool stitch, bool quiet, const std::atomic<int>* cancel, int maxTriangles) : width (width), quiet(quiet) {
+    auto checkCancel = [&cancel]() {
+        if (cancel && cancel->load(std::memory_order_relaxed))
+            throw std::runtime_error("cancelled");
+    };
+
     auto startTotalTime = std::chrono::steady_clock::now();
-    stripe = Stripe(vertsPositions, directions, triangleIndices, vertsCount, triangleCount, width, mode, stitch, quiet);
+    stripe = Stripe(vertsPositions, directions, triangleIndices, vertsCount, triangleCount, width, mode, stitch, quiet, maxTriangles);
+    checkCancel();
+
     auto startTime = std::chrono::steady_clock::now();
     stitcher = Stitcher(stripe.getPositions(), stripe.getNormals(), stripe.getTriangle(), stripe.getVertCount(), stripe.getTriangleCount(), stripe.getBorderEdges());
-    if (!quiet) std::cout << "Stitcher initialization (" << stripe.getVertCount() << " Verts): " 
+    if (!quiet) std::cout << "Stitcher initialization (" << stripe.getVertCount() << " Verts): "
         << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startTime).count() << " ms" << std::endl;
+    checkCancel();
 
     startTime = std::chrono::steady_clock::now();
     stripe.optimize();
     if (!quiet) std::cout << "Stripes generation: " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startTime).count() << " ms" << std::endl;
+    checkCancel();
 
     startTime = std::chrono::steady_clock::now();
-    stitcher.stitch(stripe.getScalars(), stripe.getPeriod(), stitch, !quiet);
+    stitcher.stitch(stripe.getScalars(), stripe.getPeriod(), stitch, !quiet, cancel);
     if (!quiet) std::cout << "Stitching: " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startTime).count() << " ms" << std::endl;
+    checkCancel();
 
     startTime = std::chrono::steady_clock::now();
     stitcher.repulse();
     if (!quiet) std::cout << "Repulse: " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startTime).count() << " ms" << std::endl;
+    checkCancel();
 
     startTime = std::chrono::steady_clock::now();
     isolines = Isolines(stitcher.getPositions(), stitcher.getNormals(), stitcher.getTriangle(), stitcher.getVertCount(), stitcher.getTriangleCount());

@@ -33,7 +33,7 @@ public:
                         --pendingTask_;
                         if (pendingTask_ == 0) {
                             noPendingTask_ = true;
-                            cvPending_.notify_one();
+                            cvPending_.notify_all();
                         }
                     }
                 }
@@ -87,14 +87,15 @@ static ThreadPool &getThreadPool() {
     return pool;
 }
 
-void Parallel::For(size_t start, size_t stop, std::function<void(size_t)> foo) {
+void Parallel::For(size_t start, size_t stop, std::function<void(size_t)> foo, const std::atomic<int>* cancel) {
     auto &pool = getThreadPool();
     size_t N = pool.threadCount();
     size_t grain = (stop-start)/N + ((stop-start)%N ? 1 : 0);
     for (uint32_t t = 0; t < N; ++t) {
         uint32_t begin = start+t*grain, end = std::min(start+(t+1)*grain, stop);
-        auto task = [begin, end, &foo]() {
+        auto task = [begin, end, &foo, cancel]() {
             for (uint32_t i = begin; i < end; ++i) {
+                if (cancel && cancel->load(std::memory_order_relaxed)) return;
                 foo(i);
             }
         };
@@ -103,7 +104,7 @@ void Parallel::For(size_t start, size_t stop, std::function<void(size_t)> foo) {
     pool.sync();
 }
 
-bool Parallel::ForAny(size_t start, size_t stop, std::function<bool(size_t)> foo) {
+bool Parallel::ForAny(size_t start, size_t stop, std::function<bool(size_t)> foo, const std::atomic<int>* cancel) {
     auto &pool = getThreadPool();
     size_t N = pool.threadCount();
     size_t grain = (stop-start)/N + ((stop-start)%N ? 1 : 0);
@@ -111,9 +112,10 @@ bool Parallel::ForAny(size_t start, size_t stop, std::function<bool(size_t)> foo
 
     for (uint32_t t = 0; t < N; ++t) {
         uint32_t begin = start+t*grain, end = std::min(start+(t+1)*grain, stop);
-        auto task = [begin, end, t, &foo, &booleans]() {
+        auto task = [begin, end, t, &foo, &booleans, cancel]() {
             bool res = false;
             for (uint32_t i = begin; i < end; ++i) {
+                if (cancel && cancel->load(std::memory_order_relaxed)) break;
                 res |= foo(i);
             }
             booleans[t] = res;
@@ -129,7 +131,7 @@ bool Parallel::ForAny(size_t start, size_t stop, std::function<bool(size_t)> foo
     return result;
 }
 
-std::array<bool, 2> Parallel::ForAny2(size_t start, size_t stop, std::function<std::array<bool, 2>(size_t)> foo) {
+std::array<bool, 2> Parallel::ForAny2(size_t start, size_t stop, std::function<std::array<bool, 2>(size_t)> foo, const std::atomic<int>* cancel) {
     auto &pool = getThreadPool();
     size_t N = pool.threadCount();
     size_t grain = (stop-start)/N + ((stop-start)%N ? 1 : 0);
@@ -138,17 +140,17 @@ std::array<bool, 2> Parallel::ForAny2(size_t start, size_t stop, std::function<s
 
     for (uint32_t t = 0; t < N; ++t) {
         uint32_t begin = start+t*grain, end = std::min(start+(t+1)*grain, stop);
-        auto task = [begin, end, t, &foo, &booleans0, &booleans1]() {
+        auto task = [begin, end, t, &foo, &booleans0, &booleans1, cancel]() {
             bool res0 = false;
             bool res1 = false;
             for (uint32_t i = begin; i < end; ++i) {
+                if (cancel && cancel->load(std::memory_order_relaxed)) break;
                 auto val = foo(i);
                 res0 |= val[0];
                 res1 |= val[1];
             }
             booleans0[t] = res0;
             booleans1[t] = res1;
-
         };
         pool.enqueue(task);
     }
@@ -162,7 +164,7 @@ std::array<bool, 2> Parallel::ForAny2(size_t start, size_t stop, std::function<s
     return result;
 }
 
-size_t Parallel::ArgMin(size_t start, size_t stop, std::function<float(size_t)> foo) {
+size_t Parallel::ArgMin(size_t start, size_t stop, std::function<float(size_t)> foo, const std::atomic<int>* cancel) {
     struct FS { float f; size_t s; };
 
     auto &pool = getThreadPool();
@@ -172,10 +174,11 @@ size_t Parallel::ArgMin(size_t start, size_t stop, std::function<float(size_t)> 
 
     for (uint32_t t = 0; t < N; ++t) {
         uint32_t begin = start+t*grain, end = std::min(start+(t+1)*grain, stop);
-        auto task = [begin, end, t, &foo, &values]() {
+        auto task = [begin, end, t, &foo, &values, cancel]() {
             float val = std::numeric_limits<float>::infinity();
             size_t id = 0;
             for (uint32_t i = begin; i < end; ++i) {
+                if (cancel && cancel->load(std::memory_order_relaxed)) return;
                 float newVal = foo(i);
                 if (newVal < val) {
                     val = newVal;
