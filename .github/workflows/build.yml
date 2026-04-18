@@ -117,12 +117,6 @@ jobs:
           name: binary-android
           path: unity/com.iota97.surface-filling-curve/Plugins/Android/
 
-      - name: Upload Unity package
-        uses: actions/upload-artifact@v4
-        with:
-          name: com.iota97.surface-filling-curve
-          path: unity/com.iota97.surface-filling-curve/
-
       - name: Publish to upm branch
         if: github.ref == 'refs/heads/main'
         run: |

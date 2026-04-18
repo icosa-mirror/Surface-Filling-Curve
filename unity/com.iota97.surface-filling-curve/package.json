@@ -2,7 +2,7 @@
   "name": "com.iota97.surface-filling-curve",
   "version": "1.0.0",
   "displayName": "Surface Filling Curve",
-  "description": "Generates continuous, field-aligned space-filling curves on triangulated meshes. Based on \"Field-Aligned Surface-Filling Curve via Implicit Stitching\" (Cocco & Chermain, Eurographics 2026). Requires the native library to be built from source — see README.md.",
+  "description": "Generates continuous, field-aligned space-filling curves on triangulated meshes. Based on \"Field-Aligned Surface-Filling Curve via Implicit Stitching\" (Cocco & Chermain, Eurographics 2026).",
   "unity": "2021.3",
   "documentationUrl": "https://xavierchermain.github.io/publications/surface-filling-curve",
   "changelogUrl": "https://github.com/iota97/Surface-Filling-Curve/blob/main/unity/com.iota97.surface-filling-curve/CHANGELOG.md",
