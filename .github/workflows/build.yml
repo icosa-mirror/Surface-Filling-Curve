@@ -128,10 +128,10 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin upm 2>/dev/null || true
+          cp -r unity/com.iota97.surface-filling-curve/. /tmp/upm-package
           git switch --orphan upm-tmp
-          git rm -rf . --quiet
-          cp -r unity/com.iota97.surface-filling-curve/. .
+          find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+          cp -r /tmp/upm-package/. .
           git add -A
           git diff --cached --quiet && exit 0
           git commit -m "chore: publish upm package [skip ci]"
