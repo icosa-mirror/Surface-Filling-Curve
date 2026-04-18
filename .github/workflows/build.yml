@@ -1,0 +1,47 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            lib_src: build_plugin/libsurface_filling_curve.dylib
+            lib_dst: unity/com.iota97.surface-filling-curve/Plugins/macOS/libsurface_filling_curve.dylib
+          - os: ubuntu-latest
+            lib_src: build_plugin/libsurface_filling_curve.so
+            lib_dst: unity/com.iota97.surface-filling-curve/Plugins/Linux/x86_64/libsurface_filling_curve.so
+          - os: windows-latest
+            lib_src: build_plugin/Release/surface_filling_curve.dll
+            lib_dst: unity/com.iota97.surface-filling-curve/Plugins/Windows/x86_64/surface_filling_curve.dll
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build_plugin -S . -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build_plugin --target surface_filling_curve --config Release
+
+      - name: Install plugin
+        shell: bash
+        run: cp "${{ matrix.lib_src }}" "${{ matrix.lib_dst }}"
+
+      - name: Sign (macOS)
+        if: runner.os == 'macOS'
+        run: codesign --force --sign - "${{ matrix.lib_dst }}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-${{ matrix.os }}
+          path: ${{ matrix.lib_dst }}
